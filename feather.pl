@@ -76,9 +76,9 @@ sub update_ol {
 sub create_run_file() {
   open(my $rf, ">", "run.scm");
   my $run_file_content = '
-    (define *path* (cons "./" (cons "./libs" *path*)))
-    (import (otus lisp))
-    (print "HELLO THERE")
+(define *path* (cons "./" (cons "./libs" *path*)))
+(import (otus lisp))
+(print "HELLO THERE")
   ';
   print $rf $run_file_content;
   close $rf;
