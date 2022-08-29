@@ -162,8 +162,8 @@ sub get_package {
   rmtree "./libs/$package_name";
   my $response = system("cd ./libs && git clone --depth=1 --branch=master $link");
   if ($response == 0 and scalar(@splitted_link) > 0) {
-    my %feather_json = open_feather_json("./libs/$package_name/feather.json");
-    my @deps = %feather_json{"deps"};
+    my $feather_json = open_feather_json("./libs/$package_name/feather.json");
+    my @deps = $feather_json->{"deps"};
     say("Known deps of package $package_name: @deps");
     if (scalar(@deps) > 0) {
       # Install deps of the deps
