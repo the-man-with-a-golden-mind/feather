@@ -6,11 +6,11 @@ use feature 'switch';
 use feature qw(say);
 use File::Path qw(rmtree);
 use File::Spec;
-use JSON::PP;
+use JSON::XS;
 use File::Find::Rule;
 use Cwd;
 use Capture::Tiny qw(tee);
-
+use Data::Dumper;
 no warnings "experimental::smartmatch";
 
 sub check_exists_command { 
@@ -138,29 +138,40 @@ sub print_help {
   say($help);
 }
 
+sub open_feather_json {
+  my ($path) = @_;
+  # my $feather_string; 
+  #{
+  #  local $/ = undef;
+    open(my $pf, "<", $path) or die "Package is not proper Feather package. Missing feather.json file";
+    #   my $feather_string = <$pf>;
+    # close $pf;
+    #}
+  my $feather_string = do { local $/; <$pf> };
+  close $pf;
+
+  my $feather_json = decode_json($feather_string); 
+  return $feather_json;
+}
+
 sub get_package {
   my ($link) = @_;
-  #if (not (-e './libs.scm')) {
-  #  open(my $lf, ">", "libs.scm");
-  #  my $libs_content = '
-  #    ; Overwrite path
-  #    (define *path* (cons "./libs/" *path*))
-  #  ';
-  #}
   my @splitted_link = split(/\//, $link);
   my $package_name = $splitted_link[$#splitted_link];
+  # Really naive aproach ...remove package to make a space for a new one
   rmtree "./libs/$package_name";
   my $response = system("cd ./libs && git clone --depth=1 --branch=master $link");
   if ($response == 0 and scalar(@splitted_link) > 0) {
-    open(my $pf, "<", "./libs/$package_name/feather.json") or die "Package is not proper Feather package. Missing feather.json file";
-    my $json = JSON::PP->new->utf8->pretty->allow_nonref; 
-    my $feather_string = do { local $/; <$pf> };
-    my %feather_json = $json->decode($feather_string);
+    my %feather_json = open_feather_json("./libs/$package_name/feather.json");
     my @deps = %feather_json{"deps"};
     say("Known deps of package $package_name: @deps");
-    say($feather_string);
+    if (scalar(@deps) > 0) {
+      # Install deps of the deps
+      foreach(@deps) {
+        get_package($_);
+      }
+    }
     
-    close $pf;
     say("Package ", $package_name, " has been added into the libs");
     
   } else {
@@ -173,7 +184,29 @@ sub install_package {
   get_package($link);
 }
 
+sub install_packages {
+  # Getting deps from feather.json
+  if (not (-d "./libs")) {
+    mkdir "./libs";
+  }
+  say("INSTALL PACKAGES");
+  my $feather_json = open_feather_json("./feather.json");
+  my @deps = @{$feather_json->{'deps'}};
+  my $deps_size = scalar(@deps);
+  if (scalar(@deps) > 0) {
+   say(Dumper(@deps)); 
+   for my $elem ( @deps ) {
+    if ($elem) {
+      get_package($elem);
+    }
+  }
+
+
+  }
+ }
+
 sub test() {
+  install_packages();
   my @errors = ();
   my $test_files_rule = File::Find::Rule->file->name("test_*.scm");
   my @test_files = File::Find::Rule->or($test_files_rule)->in(getcwd());
@@ -218,6 +251,7 @@ sub parse_command {
   my ($command, @params) = (@_);
    given ($command) {
       when (/^init/) { install_ol() }
+      when (/^installPackages/) { install_packages() }
       when (/^install/) { install_package(@params) }
       when (/^update/) { update_ol() }
       when (/^clean/) { clean_feather() }
