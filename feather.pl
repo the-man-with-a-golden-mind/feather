@@ -189,7 +189,8 @@ sub test() {
     if ($stderr) {
       my @file_name_splitted = split("/", $_);
       my $file_name = $file_name_splitted[$#file_name_splitted];
-      push(@errors, ($file_name, $stderr));
+      my @err_struct = ($file_name, $stderr);
+      push(@errors, \@err_struct);
     }
     split ("\n" ,$stdout) } @test_files;
 
@@ -197,7 +198,9 @@ sub test() {
   if (scalar(@errors) > 0) {
     say("\n----------ERRORS----------");
     foreach(@errors) {
-      my ($file_name, $err) = $_;
+      my @error = ($_);
+      my $file_name = $error[0][0];
+      my $err = $error[0][1];
       say("File: $file_name");
       say("Error MSG: $err");
       say("\n");
@@ -206,7 +209,7 @@ sub test() {
 
   my $errors_count = scalar(@errors);
   say("There were $files_tested_count test");
-  #say("Pass/Errors: $test_count/$errors_count");
+  say("There were Errors: $errors_count errors");
  # Test each file ...return summary with errors
 }
 
