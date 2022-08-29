@@ -6,6 +6,10 @@ use feature 'switch';
 use feature qw(say);
 use File::Path qw(rmtree);
 use File::Spec;
+use JSON::PP;
+use File::Find::Rule;
+use Cwd;
+use Capture::Tiny qw(tee);
 
 no warnings "experimental::smartmatch";
 
@@ -84,6 +88,20 @@ sub create_run_file() {
   close $rf;
 }
 
+sub create_feather_json_file() {
+  my $file_content = '
+{
+  "name": "package_name",
+  "author": "author_name",
+  "license": "license_name",
+  "deps": []
+}
+  ';
+  open (my $fl, ">", "feather.json");
+  print $fl $file_content;
+  close $fl;
+}
+
 sub install_ol {
   say("Installing Ol...");
   if (-d "ol") {
@@ -96,6 +114,7 @@ sub install_ol {
     mkdir "./libs";
   }
   create_run_file();
+  create_feather_json_file();
 } 
 
 sub print_help {
@@ -129,10 +148,21 @@ sub get_package {
   #  ';
   #}
   my @splitted_link = split(/\//, $link);
+  my $package_name = $splitted_link[$#splitted_link];
+  rmtree "./libs/$package_name";
   my $response = system("cd ./libs && git clone --depth=1 --branch=master $link");
   if ($response == 0 and scalar(@splitted_link) > 0) {
-    my $package_name = $splitted_link[$#splitted_link];
+    open(my $pf, "<", "./libs/$package_name/feather.json") or die "Package is not proper Feather package. Missing feather.json file";
+    my $json = JSON::PP->new->utf8->pretty->allow_nonref; 
+    my $feather_string = do { local $/; <$pf> };
+    my %feather_json = $json->decode($feather_string);
+    my @deps = %feather_json{"deps"};
+    say("Known deps of package $package_name: @deps");
+    say($feather_string);
+    
+    close $pf;
     say("Package ", $package_name, " has been added into the libs");
+    
   } else {
     say("Cannot install package from link: ", $link);
   }
@@ -143,6 +173,44 @@ sub install_package {
   get_package($link);
 }
 
+sub test() {
+  my @errors = ();
+  my $test_files_rule = File::Find::Rule->file->name("test_*.scm");
+  my @test_files = File::Find::Rule->or($test_files_rule)->in(getcwd());
+
+  my @test_files_names = map { 
+    my @splitted = split("/", $_);
+    $splitted[$#splitted];
+  } @test_files;
+
+  my @results = map { 
+    say("\nTesting $_ ...");
+    my ($stdout, $stderr) = tee { system("ol $_") };
+    if ($stderr) {
+      my @file_name_splitted = split("/", $_);
+      my $file_name = $file_name_splitted[$#file_name_splitted];
+      push(@errors, ($file_name, $stderr));
+    }
+    split ("\n" ,$stdout) } @test_files;
+
+  my $files_tested_count = scalar @results;
+  if (scalar(@errors) > 0) {
+    say("\n----------ERRORS----------");
+    foreach(@errors) {
+      my ($file_name, $err) = $_;
+      say("File: $file_name");
+      say("Error MSG: $err");
+      say("\n");
+    }
+  }
+
+  my $errors_count = scalar(@errors);
+  say("There were $files_tested_count test");
+  #say("Pass/Errors: $test_count/$errors_count");
+ # Test each file ...return summary with errors
+}
+
+
 sub parse_command {
   my ($command, @params) = (@_);
    given ($command) {
@@ -151,6 +219,7 @@ sub parse_command {
       when (/^update/) { update_ol() }
       when (/^clean/) { clean_feather() }
       when (/^help/) { print_help() }
+      when (/^test/) { test() }
       default { print_help() }
     } 
 }
