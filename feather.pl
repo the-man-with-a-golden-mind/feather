@@ -248,7 +248,7 @@ sub test() {
 
   my $errors_count = scalar(@errors);
   say("There were $files_tested_count test");
-  say("There were Errors: $errors_count errors");
+  say("There were: $errors_count errors");
  # Test each file ...return summary with errors
 }
 
