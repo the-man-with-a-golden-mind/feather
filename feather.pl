@@ -159,23 +159,25 @@ sub get_package {
   my @splitted_link = split(/\//, $link);
   my $package_name = $splitted_link[$#splitted_link];
   # Really naive aproach ...remove package to make a space for a new one
-  rmtree "./libs/$package_name";
-  my $response = system("cd ./libs && git clone --depth=1 --branch=master $link");
-  if ($response == 0 and scalar(@splitted_link) > 0) {
-    my $feather_json = open_feather_json("./libs/$package_name/feather.json");
-    my @deps = $feather_json->{"deps"};
-    say("Known deps of package $package_name: @deps");
-    if (scalar(@deps) > 0) {
-      # Install deps of the deps
+  # rmtree "./libs/$package_name";
+  if (not (-d "./libs/$package_name")) {
+    my $response = system("cd ./libs && git clone --depth=1 --branch=master $link");
+    if ($response == 0 and scalar(@splitted_link) > 0) {
+      my $feather_json = open_feather_json("./libs/$package_name/feather.json");
+      my @deps = $feather_json->{"deps"};
+      say("Known deps of package $package_name: @deps");
+      if (scalar(@deps) > 0) {
+        # Install deps of the deps
       foreach(@deps) {
         get_package($_);
       }
     }
-    
     say("Package ", $package_name, " has been added into the libs");
-    
+    } else {
+      say("Cannot install package from link: ", $link);
+    }
   } else {
-    say("Cannot install package from link: ", $link);
+    say "Package '$package_name' already installed! \n";
   }
 }
 
@@ -189,12 +191,11 @@ sub install_packages {
   if (not (-d "./libs")) {
     mkdir "./libs";
   }
-  say("INSTALL PACKAGES");
+  say("Installing packages...\n");
   my $feather_json = open_feather_json("./feather.json");
   my @deps = @{$feather_json->{'deps'}};
   my $deps_size = scalar(@deps);
   if (scalar(@deps) > 0) {
-   say(Dumper(@deps)); 
    for my $elem ( @deps ) {
     if ($elem) {
       get_package($elem);
@@ -208,17 +209,22 @@ sub install_packages {
 sub test() {
   install_packages();
   my @errors = ();
+  my $test_files_exclude = File::Find::Rule->directory->name("libs")->prune->discard;
   my $test_files_rule = File::Find::Rule->file->name("test_*.scm");
-  my @test_files = File::Find::Rule->or($test_files_rule)->in(getcwd());
+  my @test_files = File::Find::Rule->or($test_files_exclude, $test_files_rule)->in(getcwd());
 
   my @test_files_names = map { 
     my @splitted = split("/", $_);
     $splitted[$#splitted];
   } @test_files;
-
+  say "TEST FILES NAMES: @test_files_names";
   my @results = map { 
     say("\nTesting $_ ...");
-    my ($stdout, $stderr) = tee { system("ol $_") };
+    my $shell_command = "ol";
+    if (-e "run.sh") {
+      $shell_command = "./run.sh";
+    }
+    my ($stdout, $stderr) = tee { system("$shell_command $_") };
     if ($stderr) {
       my @file_name_splitted = split("/", $_);
       my $file_name = $file_name_splitted[$#file_name_splitted];
