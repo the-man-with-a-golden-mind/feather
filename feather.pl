@@ -155,6 +155,7 @@ sub open_feather_json {
 }
 
 sub get_package {
+  say("@_[0]");
   my ($link) = @_;
   my @splitted_link = split(/\//, $link);
   my $package_name = $splitted_link[$#splitted_link];
@@ -162,16 +163,12 @@ sub get_package {
   # rmtree "./libs/$package_name";
   if (not (-d "./libs/$package_name")) {
     my $response = system("cd ./libs && git clone --depth=1 --branch=master $link");
-    if ($response == 0 and scalar(@splitted_link) > 0) {
+    if ($response == 0 and scalar(@splitted_link) > 0) { 
       my $feather_json = open_feather_json("./libs/$package_name/feather.json");
-      my @deps = $feather_json->{"deps"};
-      say("Known deps of package $package_name: @deps");
-      if (scalar(@deps) > 0) {
-        # Install deps of the deps
-      foreach(@deps) {
-        get_package($_);
-      }
-    }
+      my $deps = $feather_json->{"deps"};
+      
+      print("Known deps of package $package_name:\n");
+      map { get_package($_) } @$deps;
     say("Package ", $package_name, " has been added into the libs");
     } else {
       say("Cannot install package from link: ", $link);
